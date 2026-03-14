@@ -1,0 +1,15 @@
+{
+  "name": "My WD 數位駕駛艙",
+  "short_name": "My WD",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#2c3e50",
+  "theme_color": "#2c3e50",
+  "icons": [
+    {
+      "src": "./app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

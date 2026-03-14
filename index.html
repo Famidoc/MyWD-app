@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>My WD 數位駕駛艙</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="My WD">
+  <meta name="application-name" content="My WD">
+  <meta name="theme-color" content="#2c3e50">
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="./app-icon.png">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <style>
+    /* ==================== 1. 全域設定 ==================== */
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #ecf0f1; overflow: hidden; overscroll-behavior: none; font-size: 16px;
+    }
+
+    #bg-layer {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2;
+        background-color: #2c3e50;
+        background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://upload.wikimedia.org/wikipedia/commons/e/e4/Hong_Kong_Night_Skyline.jpg');
+        background-size: cover; background-position: center; background-repeat: no-repeat;
+    }
+
+    /* ==================== 2. 版面佈局 ==================== */
+    .app-container {
+        display: flex; flex-direction: column; height: 100vh; max-width: 100%;
+        margin: 0 auto; background: transparent; 
+    }
+    .nav-tabs { display: flex; width: 100%; padding: 10px 0 0 0; flex-shrink: 0; gap: 0; }
+    .tab-btn {
+        flex: 1; padding: 12px 2px; border: none; background: rgba(0, 0, 0, 0.5); color: #95a5a6;
+        font-size: 0.95rem; cursor: pointer; border-radius: 8px 8px 0 0; margin: 0; transition: 0.2s; 
+        font-weight: bold; position: relative; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);
+        display: flex; justify-content: center; align-items: center; gap: 3px; white-space: nowrap;
+    }
+    .tab-btn + .tab-btn { border-left: 1px solid rgba(255,255,255,0.1); }
+    .tab-btn.active { background: rgba(44, 62, 80, 0.95); color: #3498db; border-top: 3px solid #3498db; border-bottom: none; z-index: 2; }
+
+    .tab-content {
+        flex: 1; background: rgba(44, 62, 80, 0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        padding: 15px; display: none; flex-direction: column; overflow: hidden; position: relative;
+        border-radius: 0 0 10px 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .tab-content.active { display: flex; }
+
+    h2 { 
+        margin: 0 0 10px 0; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;
+        color: #3498db; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; min-height: 40px;
+    }
+
+    .tools-container { display: flex; align-items: center; flex-shrink: 0; }
+    .tool-btn {
+        background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #ecf0f1; border-radius: 4px; cursor: pointer; 
+        font-size: 0.9rem; padding: 6px 12px; margin-left: 6px; transition: 0.1s; display: flex; align-items: center; justify-content: center;
+    }
+    .tool-btn:active { transform: scale(0.95); background: #3498db; border-color: #3498db; }
+    .status-text { font-size: 0.8rem; font-weight: bold; margin-right: 8px; color: #2ecc71; display: none; }
+    .status-text.show { display: inline-block; }
+
+    /* ==================== 3. 元件細節 ==================== */
+    .input-group { display: flex; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
+    .todo-input-field { flex: 1; padding: 12px; border-radius: 5px; border: none; font-size: 1rem; background: #ecf0f1; color: #2c3e50; }
+    .add-todo-btn { width: 50px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 1.5rem; cursor: pointer;}
+    .todo-ul { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; padding-right: 2px; }
+    .todo-item { background: rgba(255,255,255,0.05); padding: 8px 10px; margin-bottom: 8px; border-radius: 5px; display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.05); touch-action: none; }
+    .drag-handle { cursor: grab; color: #7f8c8d; padding: 5px 8px 5px 0; font-size: 1.2rem; user-select: none; -webkit-user-select: none; }
+    .drag-handle:active { cursor: grabbing; color: #3498db; }
+    .todo-checkbox { transform: scale(1.3); margin-right: 10px; cursor: pointer; }
+    .todo-text { flex: 1; margin: 0 5px; outline: none; word-break: break-all; line-height: 1.4; padding: 5px; }
+    .delete-btn { color:#e74c3c; border:none; background:none; font-size:1.5rem; padding:0 0 0 10px; cursor:pointer; }
+    .sortable-ghost { opacity: 0.4; background: #3498db; }
+    .sortable-drag { background: rgba(52, 152, 219, 0.9); }
+    .editor { background: #fdfdfd; color: #2c3e50; border-radius: 5px; padding: 15px; flex: 1; overflow-y: auto; outline: none; font-size: 1.05rem; line-height: 1.6; }
+    .editor img { max-width: 100%; height: auto; border-radius: 5px; margin: 5px 0; }
+    #scratch-editor { background: #34495e; color: #ecf0f1; border: 1px solid #7f8c8d; }
+    .edit-tab-icon { font-size: 0.8em; cursor: pointer; padding: 2px; }
+    .edit-tab-icon:hover { opacity: 0.8; }
+
+    #loading-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9998; transition: opacity 0.5s; }
+    
+    /* ==================== 4. 首次綁定畫面 (新增) ==================== */
+    #setup-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(44, 62, 80, 0.98); backdrop-filter: blur(15px);
+        display: none; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 9999; padding: 20px;
+    }
+    .setup-box {
+        background: rgba(0,0,0,0.6); padding: 30px; border-radius: 12px;
+        max-width: 450px; width: 100%; text-align: center; border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .setup-box h2 { border: none; justify-content: center; font-size: 1.6rem; color: #ecf0f1; margin-bottom: 5px; }
+    .setup-box p { color: #bdc3c7; line-height: 1.6; margin-bottom: 25px; font-size: 0.95rem; }
+    .setup-box input {
+        width: 100%; padding: 15px; margin-bottom: 20px; border-radius: 8px;
+        border: 2px solid #34495e; background: #ecf0f1; color: #2c3e50; font-size: 1rem;
+    }
+    .setup-box input:focus { outline: none; border-color: #3498db; }
+    .setup-box button {
+        background: #3498db; color: white; border: none; padding: 14px 25px;
+        border-radius: 8px; font-size: 1.1rem; cursor: pointer; transition: 0.2s; font-weight: bold; width: 100%;
+    }
+    .setup-box button:hover { background: #2980b9; transform: translateY(-2px); }
+
+    /* ==================== 響應式 ==================== */
+    @media (min-width: 768px) {
+        html, body { font-size: 18px; } 
+        .app-container { max-width: 900px; } 
+        .tab-btn { padding: 18px 0; font-size: 1.15rem; gap: 5px; } 
+        h2 { font-size: 1.4rem; padding-bottom: 12px; min-height: 50px; } 
+    }
+  </style>
+</head>
+<body>
+
+  <div id="bg-layer"></div>
+
+  <div id="setup-overlay">
+      <div class="setup-box">
+          <h2>🔑 系統綁定</h2>
+          <p>歡迎使用 My WD 數位駕駛艙！<br>請貼上您專屬的 <b>Google Apps Script 網址</b> 來連線您的雲端資料庫。</p>
+          <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/您的ID/exec">
+          <button onclick="saveApiUrl()">連線並啟用</button>
+      </div>
+  </div>
+
+  <div id="loading-mask">
+    <div style="font-size: 2rem;">🚀</div>
+    <div style="margin-top:10px;">連線至資料庫中...</div>
+  </div>
+
+  <div class="app-container">
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-todo', this)">📝 待辦清單</button>
+        <button class="tab-btn" onclick="switchTab('tab-project', this)">
+            📌 <span id="project-tab-label">專案待辦</span> 
+            <span class="edit-tab-icon" onclick="renameProjectTab(event)" title="修改名稱">✏️</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('tab-idea', this)">💡 靈感筆記</button>
+        <button class="tab-btn" onclick="switchTab('tab-scratch', this)">📋 臨時編輯</button>
+    </div>
+
+    <div id="tab-todo" class="tab-content active">
+        <h2>
+            待辦事項
+            <div class="tools-container">
+                <span id="status-todo" class="status-text">💾</span>
+                <button class="tool-btn" onclick="copyTodos()" title="複製">📑</button>
+                <button class="tool-btn" onclick="pasteTodos()" title="貼上">📥</button>
+            </div>
+        </h2>
+        <div class="input-group">
+            <input type="text" id="todo-input" class="todo-input-field" placeholder="新增事項...">
+            <button id="add-todo-btn" class="add-todo-btn">+</button>
+        </div>
+        <ul id="todo-list" class="todo-ul"></ul>
+    </div>
+
+    <div id="tab-project" class="tab-content">
+        <h2>
+            <span id="project-header-label">專案待辦</span>
+            <div class="tools-container">
+                <span id="status-projectTodo" class="status-text">💾</span>
+                <button class="tool-btn" onclick="copyProjectTodos()" title="複製">📑</button>
+                <button class="tool-btn" onclick="pasteProjectTodos()" title="貼上">📥</button>
+            </div>
+        </h2>
+        <div class="input-group">
+            <input type="text" id="project-todo-input" class="todo-input-field" placeholder="新增專案任務...">
+            <button id="add-project-btn" class="add-todo-btn">+</button>
+        </div>
+        <ul id="project-list" class="todo-ul"></ul>
+    </div>
+
+    <div id="tab-idea" class="tab-content">
+        <h2>
+            靈感筆記
+            <div class="tools-container">
+                <span id="status-idea" class="status-text">💾</span>
+                <button class="tool-btn" onclick="copyIdea()" title="複製">📑</button>
+                <button class="tool-btn" onclick="pasteIdea()" title="貼上">📥</button>
+            </div>
+        </h2>
+        <div id="idea-editor" class="editor" contenteditable="true"></div>
+    </div>
+
+    <div id="tab-scratch" class="tab-content">
+        <h2>
+            臨時區
+            <div class="tools-container">
+                <span id="status-scratch" class="status-text">💾</span>
+                <button class="tool-btn" onclick="copyScratch()" title="複製">📑</button>
+                <button class="tool-btn" onclick="pasteScratch()" title="貼上">📥</button>
+                <button class="tool-btn" onclick="clearScratch()" title="清空" style="border-color: #e74c3c; color:#e74c3c">🗑️</button>
+            </div>
+        </h2>
+        <div id="scratch-editor" class="editor" contenteditable="true"></div>
+    </div>
+    
+    <div style="text-align: center; padding: 12px; font-size: 0.85rem; color: #95a5a6; border-top: 1px solid rgba(255,255,255,0.1); margin-top: auto;">
+        <span onclick="resetApiUrl()" style="cursor: pointer; color: #e74c3c; margin-bottom: 5px; display: inline-block;">🔌 解除 API 綁定</span><br>
+        by Famidoc Chang & Gemini 3.1 Pro <br>
+        <a href="https://famidoc.github.io/?id=w4qxn" target="_blank" style="color: #3498db; text-decoration: none; display: inline-block; margin-top: 5px;">
+            🌐 參觀 My AI Works 展示分享平台
+        </a>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 1. API 綁定邏輯 ====================
+    const STORAGE_KEY = 'my_wd_gas_api_url_v3';
+    let GAS_API_URL = localStorage.getItem(STORAGE_KEY);
+
+    window.onload = function() {
+        // 喚醒 PWA 機制
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(err => console.error(err));
+        }
+
+        // 檢查是否已綁定 API
+        if (!GAS_API_URL) {
+            document.getElementById('loading-mask').style.display = 'none';
+            document.getElementById('setup-overlay').style.display = 'flex';
+        } else {
+            document.getElementById('setup-overlay').style.display = 'none';
+            fetchDataFromDrive();
+            enableImageResizing();
+        }
+    };
+
+    function saveApiUrl() {
+        const inputUrl = document.getElementById('api-url-input').value.trim();
+        if (inputUrl && inputUrl.includes('script.google.com/macros/')) {
+            localStorage.setItem(STORAGE_KEY, inputUrl);
+            GAS_API_URL = inputUrl;
+            document.getElementById('setup-overlay').style.display = 'none';
+            document.getElementById('loading-mask').style.display = 'flex';
+            fetchDataFromDrive();
+            enableImageResizing();
+        } else {
+            alert('⚠️ 網址格式錯誤！請確保是 https://script.google.com/ 開頭的網址。');
+        }
+    }
+
+    function resetApiUrl() {
+        if (confirm('確定要解除綁定嗎？這會讓您登出目前的資料庫。')) {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload();
+        }
+    }
+
+    // ==================== 2. 頁籤切換 ====================
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
+    // ==================== 3. 資料讀取與儲存 ====================
+    let appData = { todos:[], projectTodos:[], notes:{idea:'', scratch:''}, settings:{} };
+    let saveTimer;
+    let sortableInstanceTodo; 
+    let sortableInstanceProject; 
+
+    function fetchDataFromDrive() {
+        if(!GAS_API_URL) return;
+        
+        fetch(GAS_API_URL)
+            .then(response => response.json())
+            .then(data => { initData(data); })
+            .catch(error => {
+                console.error("讀取資料庫失敗:", error);
+                const loadingMask = document.getElementById('loading-mask');
+                if (loadingMask) {
+                    loadingMask.innerHTML = `
+                        <div style="color:#e74c3c; font-size: 1.2rem; text-align: center; line-height:1.5;">
+                        ❌ 無法連線至 Google Drive<br>
+                        <span style="font-size: 0.9rem; color: #ecf0f1;">請檢查您輸入的 API 網址是否正確，或是否已將 GAS 部署權限設為「所有人」。</span><br><br>
+                        <button onclick="resetApiUrl()" style="padding:8px 15px; border-radius:5px; background:#e74c3c; color:white; border:none; cursor:pointer;">重新輸入網址</button>
+                        </div>`;
+                }
+            });
+    }
+
+    function initData(data) {
+        if(data) appData = data;
+        
+        if(!appData.notes) appData.notes = {idea:'', scratch:''};
+        if(!appData.projectTodos) appData.projectTodos = [];
+        if(!appData.settings) appData.settings = {};
+        if(!appData.settings.projectTabName) appData.settings.projectTabName = '專案待辦';
+
+        updateProjectTabUI();
+        renderTodos();
+        renderProjectTodos();
+        
+        document.getElementById('idea-editor').innerHTML = appData.notes.idea || '';
+        document.getElementById('scratch-editor').innerHTML = appData.notes.scratch || '';
+        
+        const loadingMask = document.getElementById('loading-mask');
+        if(loadingMask) {
+            loadingMask.style.opacity = '0';
+            setTimeout(()=> loadingMask.remove(), 500);
+        }
+    }
+
+    function save(type) {
+        if(!GAS_API_URL) return;
+        
+        const statusIds = { 
+            'todo': 'status-todo', 'projectTodo': 'status-projectTodo',
+            'projectTabName': 'status-projectTodo', 'idea': 'status-idea', 'scratch': 'status-scratch' 
+        };
+        const statusEl = document.getElementById(statusIds[type] || 'status-idea');
+        if(statusEl) { statusEl.innerText = '💾'; statusEl.classList.add('show'); }
+
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            appData.notes.idea = document.getElementById('idea-editor').innerHTML;
+            appData.notes.scratch = document.getElementById('scratch-editor').innerHTML;
+            
+            let payload;
+            if (type === 'todo') payload = appData.todos;
+            else if (type === 'projectTodo') payload = appData.projectTodos;
+            else if (type === 'projectTabName') payload = appData.settings.projectTabName;
+            else if (type === 'idea') payload = appData.notes.idea;
+            else if (type === 'scratch') payload = appData.notes.scratch;
+            
+            fetch(`${GAS_API_URL}?section=${type}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload),
+                redirect: 'follow'
+            })
+            .then(response => response.json())
+            .then(result => {
+                if(result.status === "success" && statusEl) {
+                    statusEl.innerText = 'OK';
+                    setTimeout(() => { statusEl.classList.remove('show'); }, 1000);
+                }
+            })
+            .catch(error => {
+                if(statusEl) { statusEl.innerText = '❌ 錯誤'; console.error("儲存失敗:", error); }
+            });
+        }, 1500);
+    }
+
+    // ==================== 4. UI 互動與功能 ====================
+    window.renameProjectTab = (event) => {
+        event.stopPropagation(); 
+        const currentName = appData.settings.projectTabName || '專案待辦';
+        const newName = prompt('請輸入新的專案名稱：', currentName);
+        if (newName && newName.trim() !== '' && newName !== currentName) {
+            appData.settings.projectTabName = newName.trim();
+            updateProjectTabUI(); save('projectTabName');
+        }
+    };
+
+    function updateProjectTabUI() {
+        const name = appData.settings.projectTabName;
+        document.getElementById('project-tab-label').innerText = name;
+        document.getElementById('project-header-label').innerText = name;
+    }
+
+    // 待辦事項 (一般)
+    document.getElementById('add-todo-btn').onclick = () => {
+        const t = document.getElementById('todo-input').value.trim();
+        if(t) { appData.todos.push({txt:t, done:false}); document.getElementById('todo-input').value=''; renderTodos(); save('todo'); }
+    };
+
+    function renderTodos() {
+        const ul = document.getElementById('todo-list'); ul.innerHTML = '';
+        appData.todos.forEach((todo, i) => {
+            const li = document.createElement('li'); li.className = 'todo-item'; li.setAttribute('data-index', i);
+            li.innerHTML = `
+                <div class="drag-handle">☰</div>
+                <input type="checkbox" class="todo-checkbox" ${todo.done?'checked':''} onchange="toggleTodo(${i})">
+                <span class="todo-text" ${todo.done ? '' : 'contenteditable="true"'} onblur="updateTodoText(${i}, this)" style="${todo.done?'text-decoration:line-through;opacity:0.5':''}">${todo.txt}</span>
+                <button class="delete-btn" onclick="delTodo(${i})">×</button>
+            `;
+            ul.appendChild(li);
+        });
+        if (!sortableInstanceTodo) {
+            sortableInstanceTodo = new Sortable(ul, { animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', delay: 0, touchStartThreshold: 3, onEnd: function (evt) { saveTodosOrder(); } });
+        }
+    }
+
+    window.toggleTodo = (i) => { appData.todos[i].done = !appData.todos[i].done; renderTodos(); save('todo'); };
+    window.delTodo = (i) => { if (confirm('確定要刪除？')) { appData.todos.splice(i, 1); renderTodos(); save('todo'); } };
+    window.updateTodoText = (i, el) => { appData.todos[i].txt = el.innerText; save('todo'); };
+    function saveTodosOrder() {
+        const newTodos = [];
+        document.getElementById('todo-list').querySelectorAll('.todo-item').forEach(li => { newTodos.push({ txt: li.querySelector('.todo-text').innerText, done: li.querySelector('.todo-checkbox').checked }); });
+        appData.todos = newTodos; renderTodos(); save('todo');
+    }
+
+    // 專案待辦事項
+    document.getElementById('add-project-btn').onclick = () => {
+        const t = document.getElementById('project-todo-input').value.trim();
+        if(t) { appData.projectTodos.push({txt:t, done:false}); document.getElementById('project-todo-input').value=''; renderProjectTodos(); save('projectTodo'); }
+    };
+
+    function renderProjectTodos() {
+        const ul = document.getElementById('project-list'); ul.innerHTML = '';
+        appData.projectTodos.forEach((todo, i) => {
+            const li = document.createElement('li'); li.className = 'todo-item'; li.setAttribute('data-index', i);
+            li.innerHTML = `
+                <div class="drag-handle">☰</div>
+                <input type="checkbox" class="todo-checkbox" ${todo.done?'checked':''} onchange="toggleProject(${i})">
+                <span class="todo-text" ${todo.done ? '' : 'contenteditable="true"'} onblur="updateProjectText(${i}, this)" style="${todo.done?'text-decoration:line-through;opacity:0.5':''}">${todo.txt}</span>
+                <button class="delete-btn" onclick="delProject(${i})">×</button>
+            `;
+            ul.appendChild(li);
+        });
+        if (!sortableInstanceProject) {
+            sortableInstanceProject = new Sortable(ul, { animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', delay: 0, touchStartThreshold: 3, onEnd: function (evt) { saveProjectTodosOrder(); } });
+        }
+    }
+
+    window.toggleProject = (i) => { appData.projectTodos[i].done = !appData.projectTodos[i].done; renderProjectTodos(); save('projectTodo'); };
+    window.delProject = (i) => { if (confirm('確定要刪除這項專案任務？')) { appData.projectTodos.splice(i, 1); renderProjectTodos(); save('projectTodo'); } };
+    window.updateProjectText = (i, el) => { appData.projectTodos[i].txt = el.innerText; save('projectTodo'); };
+    function saveProjectTodosOrder() {
+        const newTodos = [];
+        document.getElementById('project-list').querySelectorAll('.todo-item').forEach(li => { newTodos.push({ txt: li.querySelector('.todo-text').innerText, done: li.querySelector('.todo-checkbox').checked }); });
+        appData.projectTodos = newTodos; renderProjectTodos(); save('projectTodo');
+    }
+
+    // 編輯器與剪貼簿
+    document.getElementById('idea-editor').oninput = () => save('idea');
+    document.getElementById('scratch-editor').oninput = () => save('scratch');
+    window.clearScratch = () => { if(confirm('確定要清空臨時編輯區嗎？')) { document.getElementById('scratch-editor').innerHTML=''; save('scratch'); } };
+
+    function robustCopy(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(() => alert('✅ 已複製')).catch(() => fallbackCopy(text)); } else { fallbackCopy(text); }
+    }
+    function fallbackCopy(text) {
+        try {
+            var textArea = document.createElement("textarea"); textArea.value = text;
+            textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+            document.body.appendChild(textArea); textArea.focus(); textArea.select();
+            var successful = document.execCommand('copy'); document.body.removeChild(textArea);
+            if (successful) alert('✅ 已複製'); else alert('❌ 複製失敗');
+        } catch (err) { alert('❌ 無法複製'); }
+    }
+    async function handlePaste(targetElementId, type) {
+        try { const text = await navigator.clipboard.readText(); if (text) { insertText(targetElementId, text, type); return; } } catch (err) {}
+        document.getElementById(targetElementId).focus(); alert('⚠️ 手機請直接在輸入框「長按」並選擇「貼上」');
+    }
+    function insertText(elementId, text, type) {
+        const el = document.getElementById(elementId);
+        if (type === 'todo' || type === 'projectTodo') {
+            const lines = text.split('\n'); let added = false;
+            lines.forEach(line => {
+                const t = line.trim().replace(/^[-*]\s+(\[[x ]\]\s+)?|^\d+\.\s+/i, '');
+                if(t) { if(type === 'todo') appData.todos.push({txt: t, done: false}); else appData.projectTodos.push({txt: t, done: false}); added = true; }
+            });
+            if(added) { if(type === 'todo') { renderTodos(); save('todo'); } else { renderProjectTodos(); save('projectTodo'); } alert('✅ 已貼上清單'); }
+        } else { el.innerHTML += `<div>${text.replace(/\n/g, '<br>')}</div>`; save(elementId === 'idea-editor' ? 'idea' : 'scratch'); }
+    }
+
+    window.copyTodos = () => { robustCopy(appData.todos.map(t => `- [${t.done?'x':' '}] ${t.txt}`).join('\n')); };
+    window.pasteTodos = () => { handlePaste('todo-input', 'todo'); };
+    window.copyProjectTodos = () => { robustCopy(appData.projectTodos.map(t => `- [${t.done?'x':' '}] ${t.txt}`).join('\n')); };
+    window.pasteProjectTodos = () => { handlePaste('project-todo-input', 'projectTodo'); };
+    window.copyIdea = () => { robustCopy(document.getElementById('idea-editor').innerText); };
+    window.pasteIdea = () => { handlePaste('idea-editor', 'editor'); };
+    window.copyScratch = () => { robustCopy(document.getElementById('scratch-editor').innerText); };
+    window.pasteScratch = () => { handlePaste('scratch-editor', 'editor'); };
+
+    // 圖片縮放
+    function enableImageResizing() {
+        let isResizing = false, currentImg = null, startX = 0, startWidth = 0;
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'IMG' && e.target.closest('.editor')) {
+                e.preventDefault(); isResizing = true; currentImg = e.target; startX = e.clientX;
+                startWidth = parseInt(window.getComputedStyle(currentImg).width, 10); currentImg.classList.add('img-resizing');
+            }
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing || !currentImg) return;
+            const diffX = e.clientX - startX; let newWidth = startWidth + diffX * 1.5;
+            if (newWidth < 50) newWidth = 50; if (newWidth > currentImg.parentElement.offsetWidth) newWidth = currentImg.parentElement.offsetWidth;
+            currentImg.style.width = `${newWidth}px`; currentImg.style.height = 'auto';
+        });
+        document.addEventListener('mouseup', () => {
+            if (isResizing && currentImg) {
+                currentImg.classList.remove('img-resizing'); currentImg.parentElement.dispatchEvent(new Event('input'));
+                const editorId = currentImg.closest('.editor').id; save(editorId === 'idea-editor' ? 'idea' : 'scratch');
+            }
+            isResizing = false; currentImg = null;
+        });
+    }
+  </script>
+</body>
+</html>
