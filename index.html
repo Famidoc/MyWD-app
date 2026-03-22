@@ -72,8 +72,8 @@
     .todo-input-field { flex: 1; padding: 12px; border-radius: 5px; border: none; font-size: 1rem; background: #ecf0f1; color: #2c3e50; }
     .add-todo-btn { width: 50px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 1.5rem; cursor: pointer;}
     .todo-ul { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; padding-right: 2px; }
-    .todo-item { background: rgba(255,255,255,0.05); padding: 8px 10px; margin-bottom: 8px; border-radius: 5px; display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.05); touch-action: none; }
-    .drag-handle { cursor: grab; color: #7f8c8d; padding: 5px 8px 5px 0; font-size: 1.2rem; user-select: none; -webkit-user-select: none; }
+    .todo-item { background: rgba(255,255,255,0.05); padding: 8px 10px; margin-bottom: 8px; border-radius: 5px; display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
+    .drag-handle { cursor: grab; color: #7f8c8d; padding: 5px 8px 5px 0; font-size: 1.2rem; user-select: none; -webkit-user-select: none; touch-action: none; }
     .drag-handle:active { cursor: grabbing; color: #3498db; }
     .todo-checkbox { transform: scale(1.3); margin-right: 10px; cursor: pointer; }
     .todo-text { flex: 1; margin: 0 5px; outline: none; word-break: break-all; line-height: 1.4; padding: 5px; }
@@ -120,6 +120,11 @@
         .tab-btn { padding: 18px 0; font-size: 1.15rem; gap: 5px; } 
         h2 { font-size: 1.4rem; padding-bottom: 12px; min-height: 50px; } 
     }
+    /* 鬧鐘元件樣式 */
+    .alarm-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0 5px; opacity: 0.4; transition: 0.2s; }
+    .alarm-btn.active { opacity: 1; filter: drop-shadow(0 0 3px #f1c40f); }
+    .alarm-input { font-size: 0.8rem; padding: 2px; border-radius: 4px; border: 1px solid #7f8c8d; background: #ecf0f1; display: none; margin-right: 5px; max-width: 125px; }
+    .alarm-input.show { display: inline-block; }
   </style>
 </head>
 <body>
@@ -380,14 +385,20 @@
         if(t) { appData.todos.push({txt:t, done:false}); document.getElementById('todo-input').value=''; renderTodos(); save('todo'); }
     };
 
+    // === 待辦事項 (一般) ===
     function renderTodos() {
         const ul = document.getElementById('todo-list'); ul.innerHTML = '';
         appData.todos.forEach((todo, i) => {
             const li = document.createElement('li'); li.className = 'todo-item'; li.setAttribute('data-index', i);
+            // 將鬧鐘資料綁定在 DOM 上以利排序時讀取
+            li.setAttribute('data-alarm', todo.alarm || '');
+            li.setAttribute('data-alarm-triggered', todo.alarmTriggered || false);
             li.innerHTML = `
                 <div class="drag-handle">☰</div>
                 <input type="checkbox" class="todo-checkbox" ${todo.done?'checked':''} onchange="toggleTodo(${i})">
                 <span class="todo-text" ${todo.done ? '' : 'contenteditable="true"'} onblur="updateTodoText(${i}, this)" style="${todo.done?'text-decoration:line-through;opacity:0.5':''}">${todo.txt}</span>
+                <input type="datetime-local" class="alarm-input" value="${todo.alarm || ''}" onchange="setAlarm(${i}, this.value, 'todo')">
+                <button class="alarm-btn ${todo.alarm ? 'active' : ''}" onclick="toggleAlarmUI(this)" title="設定提醒">⏰</button>
                 <button class="delete-btn" onclick="delTodo(${i})">×</button>
             `;
             ul.appendChild(li);
@@ -395,6 +406,32 @@
         if (!sortableInstanceTodo) {
             sortableInstanceTodo = new Sortable(ul, { animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', delay: 0, touchStartThreshold: 3, onEnd: function (evt) { saveTodosOrder(); } });
         }
+    }
+
+    function saveTodosOrder() {
+        const newTodos = [];
+        document.getElementById('todo-list').querySelectorAll('.todo-item').forEach(li => { 
+            newTodos.push({ 
+                txt: li.querySelector('.todo-text').innerText, 
+                done: li.querySelector('.todo-checkbox').checked,
+                alarm: li.getAttribute('data-alarm') || '',
+                alarmTriggered: li.getAttribute('data-alarm-triggered') === 'true'
+            }); 
+        });
+        appData.todos = newTodos; renderTodos(); save('todo');
+    }
+
+    function saveTodosOrder() {
+        const newTodos = [];
+        document.getElementById('todo-list').querySelectorAll('.todo-item').forEach(li => { 
+            newTodos.push({ 
+                txt: li.querySelector('.todo-text').innerText, 
+                done: li.querySelector('.todo-checkbox').checked,
+                alarm: li.getAttribute('data-alarm') || '',
+                alarmTriggered: li.getAttribute('data-alarm-triggered') === 'true'
+            }); 
+        });
+        appData.todos = newTodos; renderTodos(); save('todo');
     }
 
     window.toggleTodo = (i) => { appData.todos[i].done = !appData.todos[i].done; renderTodos(); save('todo'); };
@@ -503,6 +540,67 @@
             isResizing = false; currentImg = null;
         });
     }
+    // ==================== 5. 鬧鐘與通知機制 ====================
+    
+    // 切換時間輸入框的顯示狀態
+    window.toggleAlarmUI = (btn) => {
+        const input = btn.previousElementSibling;
+        input.classList.toggle('show');
+    };
+
+    // 儲存設定的鬧鐘時間
+    window.setAlarm = (i, value, type) => {
+        if (type === 'todo') {
+            appData.todos[i].alarm = value;
+            appData.todos[i].alarmTriggered = false; // 重置觸發狀態
+            renderTodos(); save('todo');
+        } else {
+            appData.projectTodos[i].alarm = value;
+            appData.projectTodos[i].alarmTriggered = false;
+            renderProjectTodos(); save('projectTodo');
+        }
+        
+        // 要求瀏覽器通知權限
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+    };
+
+    // 發送系統通知
+    function triggerNotification(title, body) {
+        if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(title, { body: body, icon: './app-icon.png' });
+        } else {
+            // 若裝置不支援或未授權，退回使用 Alert
+            alert(`【${title}】\n${body}`); 
+        }
+    }
+
+    // 定時器：每 30 秒檢查一次是否有鬧鐘到期
+    setInterval(() => {
+        if(!appData.todos && !appData.projectTodos) return;
+        const now = new Date();
+
+        const checkAlarms = (list) => {
+            let changed = false;
+            list.forEach(item => {
+                // 檢查：有設定鬧鐘、尚未完成、且尚未觸發過
+                if (item.alarm && !item.done && !item.alarmTriggered) {
+                    const alarmTime = new Date(item.alarm);
+                    if (now >= alarmTime) {
+                        triggerNotification('⏰ 待辦提醒', item.txt);
+                        item.alarmTriggered = true; // 標記為已觸發
+                        changed = true;
+                    }
+                }
+            });
+            return changed;
+        };
+
+        if (appData.todos && checkAlarms(appData.todos)) save('todo');
+        if (appData.projectTodos && checkAlarms(appData.projectTodos)) save('projectTodo');
+
+    }, 30000);
   </script>
 </body>
 </html>
